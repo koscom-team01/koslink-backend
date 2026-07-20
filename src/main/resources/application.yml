@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: koslink
+
+naver:
+  api:
+    client-id: XDfkw7nEXh_TSWWWbYBy
+    client-secret: A6wJY6CriE
+    base-url: https://openapi.naver.com
+    news-search-path: /v1/search/news.json
