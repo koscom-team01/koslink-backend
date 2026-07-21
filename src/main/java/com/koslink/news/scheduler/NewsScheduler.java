@@ -4,6 +4,7 @@ import com.koslink.news.dto.NewsItem;
 import com.koslink.news.dto.NewsSearchRequest;
 import com.koslink.news.dto.NewsSearchResponse;
 import com.koslink.news.service.NewsService;
+import com.koslink.news.util.NaverNewsUrlFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -80,14 +81,24 @@ public class NewsScheduler {
             // 2. 신규 기사 추출
             List<NewsItem> newItems = extractNewItems(response.items(), lastSeenLink);
 
+            // 3. 네이버 뉴스 URL 필터링
+            List<NewsItem> naverNewsItems = newItems.stream()
+                    .filter(item -> NaverNewsUrlFilter.isNaverNewsUrl(item.link()))
+                    .toList();
+
+            int filteredCount = newItems.size() - naverNewsItems.size();
+            if (filteredCount > 0) {
+                log.info("Filtered out {} non-Naver news URLs", filteredCount);
+            }
+
             if (lastSeenLink == null) {
                 // 최초 실행: 캐시 워밍업만 수행 (AI 분석/크롤링 스킵)
                 log.info("First run - cache warming up only (skip AI analysis)");
-            } else if (newItems.isEmpty()) {
-                log.info("No new items since last polling");
+            } else if (naverNewsItems.isEmpty()) {
+                log.info("No new Naver news items to process");
             } else {
-                // TODO: Phase 3,4 - 네이버 URL 필터링 및 중복 판별 로직 추가 예정
-                log.info("Processing {} new items", newItems.size());
+                // TODO: Phase 4 - 중복 판별 로직 추가 예정
+                log.info("Processing {} new Naver news items", naverNewsItems.size());
             }
 
             // 3. 커서 갱신 (항상 최신 기사의 link로 갱신)
