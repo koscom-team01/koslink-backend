@@ -2,6 +2,7 @@ package com.koslink.news.scheduler;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.koslink.news.cache.ArticleFingerprint;
+import com.koslink.news.crawler.NaverNewsCrawler;
 import com.koslink.news.dto.NewsItem;
 import com.koslink.news.dto.NewsSearchRequest;
 import com.koslink.news.dto.NewsSearchResponse;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Slf4j
@@ -29,6 +31,7 @@ public class NewsScheduler {
 
     private final NewsService newsService;
     private final Cache<String, ArticleFingerprint> recentArticleCache;
+    private final NaverNewsCrawler naverNewsCrawler;
 
     /**
      * 마지막으로 처리한 기사의 link (커서)
@@ -105,19 +108,32 @@ public class NewsScheduler {
             }
 
             if (!isDuplicate) {
-                // 새로운 사건 → 캐시 등록 + 크롤링 대상
-                ArticleFingerprint fingerprint = new ArticleFingerprint(
-                        item.link(),
-                        item.title(),  // 원본 제목 저장
-                        newTokens,
-                        LocalDateTime.now()
-                );
-
-                recentArticleCache.put(item.link(), fingerprint);
-                newArticleCount++;
-
+                // 새로운 사건 → 크롤링 시도
                 log.info("New article detected: [{}]", item.title());
-                // TODO: Phase 5 - 크롤링 및 DB 저장 로직 추가 예정
+
+                Optional<String> bodyOpt = naverNewsCrawler.crawlBody(item.link());
+
+                if (bodyOpt.isPresent()) {
+                    String body = bodyOpt.get();
+                    log.info("Crawling success: [{}] (body length: {} chars)", body, body.length());
+
+                    // 캐시 등록
+                    ArticleFingerprint fingerprint = new ArticleFingerprint(
+                            item.link(),
+                            item.title(),  // 원본 제목 저장
+                            newTokens,
+                            LocalDateTime.now()
+                    );
+                    recentArticleCache.put(item.link(), fingerprint);
+                    newArticleCount++;
+
+                    // TODO: DB 저장 로직 (NewsEvent, NewsSource 생성)
+                    // TODO: AI 분석 파이프라인 트리거
+
+                } else {
+                    log.warn("Crawling failed, skip article: [{}] {}", item.title(), item.link());
+                    // 크롤링 실패한 기사는 캐시에 등록하지 않음 (다음 폴링에서 재시도 가능)
+                }
             }
         }
 
