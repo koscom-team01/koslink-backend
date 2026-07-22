@@ -25,3 +25,6 @@ naver:
     client-secret: A6wJY6CriE
     base-url: https://openapi.naver.com
     news-search-path: /v1/search/news.json
+
+crawler:
+  delay-ms: 200  # 크롤링 요청 간 최소 딜레이 (밀리초)

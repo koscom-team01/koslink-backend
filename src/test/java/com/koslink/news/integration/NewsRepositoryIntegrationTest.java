@@ -32,7 +32,7 @@ class NewsRepositoryIntegrationTest {
     void should_save_crawled_article_to_db() {
         // given
         NewsItem item = NewsItemStub.NAVER_NEWS_1;
-        OffsetDateTime publishedAt = DateParser.parseNaverPubDate(item.pubDate());
+        OffsetDateTime publishedAt = DateParser.parseNaverPubDate(item.pubDate()).orElseThrow();
 
         News news = News.of(
                 item.title(),
@@ -61,6 +61,8 @@ class NewsRepositoryIntegrationTest {
     @DisplayName("여러 기사를 배치로 저장한다")
     void should_batch_save_multiple_articles() {
         // given
+        long countBefore = newsRepository.count();
+
         NewsItem item1 = NewsItemStub.NAVER_NEWS_1;
         NewsItem item2 = NewsItemStub.NAVER_NEWS_2;
 
@@ -69,7 +71,7 @@ class NewsRepositoryIntegrationTest {
                 CrawledNewsStub.CRAWLED_NEWS_1.body(),
                 item1.link(),
                 CrawledNewsStub.CRAWLED_NEWS_1.press(),
-                DateParser.parseNaverPubDate(item1.pubDate())
+                DateParser.parseNaverPubDate(item1.pubDate()).orElseThrow()
         );
 
         News news2 = News.of(
@@ -77,15 +79,23 @@ class NewsRepositoryIntegrationTest {
                 CrawledNewsStub.CRAWLED_NEWS_2.body(),
                 item2.link(),
                 CrawledNewsStub.CRAWLED_NEWS_2.press(),
-                DateParser.parseNaverPubDate(item2.pubDate())
+                DateParser.parseNaverPubDate(item2.pubDate()).orElseThrow()
         );
 
         // when
         List<News> saved = newsRepository.saveAll(List.of(news1, news2));
+        newsRepository.flush();
 
         // then
         assertThat(saved).hasSize(2);
-        assertThat(newsRepository.count()).isEqualTo(2);
+        assertThat(newsRepository.count()).isEqualTo(countBefore + 2);
+
+        // 저장된 URL 검증
+        Set<String> savedUrls = Set.of(
+                saved.get(0).getUrl(),
+                saved.get(1).getUrl()
+        );
+        assertThat(savedUrls).containsExactlyInAnyOrder(item1.link(), item2.link());
     }
 
     @Test
@@ -100,10 +110,11 @@ class NewsRepositoryIntegrationTest {
                 CrawledNewsStub.CRAWLED_NEWS_1.body(),
                 item1.link(),
                 CrawledNewsStub.CRAWLED_NEWS_1.press(),
-                DateParser.parseNaverPubDate(item1.pubDate())
+                DateParser.parseNaverPubDate(item1.pubDate()).orElseThrow()
         );
 
         newsRepository.save(news1);
+        newsRepository.flush();
 
         // when
         List<String> urlsToCheck = List.of(item1.link(), item2.link());
@@ -126,7 +137,7 @@ class NewsRepositoryIntegrationTest {
                 CrawledNewsStub.CRAWLED_NEWS_WITHOUT_PRESS.body(),
                 item.link(),
                 CrawledNewsStub.CRAWLED_NEWS_WITHOUT_PRESS.press(), // null
-                DateParser.parseNaverPubDate(item.pubDate())
+                DateParser.parseNaverPubDate(item.pubDate()).orElseThrow()
         );
 
         // when

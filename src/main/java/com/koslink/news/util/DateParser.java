@@ -4,7 +4,9 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * 네이버 뉴스 API pubDate 파싱 유틸리티
@@ -16,13 +18,18 @@ public class DateParser {
     private static final DateTimeFormatter FORMATTER =
             DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z", Locale.ENGLISH);
 
-    public static OffsetDateTime parseNaverPubDate(String pubDate) {
+    /**
+     * 네이버 뉴스 API의 pubDate 문자열을 OffsetDateTime으로 파싱
+     *
+     * @param pubDate RFC 1123 형식의 날짜 문자열
+     * @return 파싱된 OffsetDateTime (파싱 실패 시 Optional.empty())
+     */
+    public static Optional<OffsetDateTime> parseNaverPubDate(String pubDate) {
         try {
-            return OffsetDateTime.parse(pubDate, FORMATTER);
-        } catch (Exception e) {
-            log.error("Failed to parse pubDate: {}", pubDate, e);
-            // 파싱 실패 시 현재 시간 반환
-            return OffsetDateTime.now();
+            return Optional.of(OffsetDateTime.parse(pubDate, FORMATTER));
+        } catch (DateTimeParseException e) {
+            log.error("Failed to parse pubDate: '{}' - {}", pubDate, e.getMessage());
+            return Optional.empty();
         }
     }
 }

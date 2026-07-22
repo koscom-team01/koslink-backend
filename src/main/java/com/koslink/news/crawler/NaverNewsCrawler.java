@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -13,6 +14,7 @@ import java.util.Optional;
 /**
  * 네이버 뉴스 본문 크롤러
  * Jaccard 유사도 판별을 통과한 신규 기사의 본문 + 언론사명 크롤링
+ * Rate limiting 적용: 요청 간 설정 가능한 딜레이로 서버 부하 방지
  */
 @Slf4j
 @Component
@@ -22,13 +24,31 @@ public class NaverNewsCrawler {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
     /**
+     * 크롤링 요청 간 최소 딜레이 (밀리초)
+     * application.yml의 crawler.delay-ms 설정값 (기본값: 100ms)
+     */
+    private final long delayMillis;
+
+    /**
+     * 마지막 크롤링 시각 (밀리초)
+     */
+    private volatile long lastCrawlTime = 0;
+
+    public NaverNewsCrawler(@Value("${crawler.delay-ms:100}") long delayMillis) {
+        this.delayMillis = delayMillis;
+        log.info("NaverNewsCrawler initialized with delay: {}ms", delayMillis);
+    }
+
+    /**
      * 네이버 뉴스 기사 크롤링 (본문 + 언론사명)
+     * Rate limiting: 설정된 딜레이만큼 대기 후 요청
      *
      * @param url 네이버 뉴스 URL (https://n.news.naver.com/...)
      * @return 크롤링된 뉴스 데이터 (크롤링 실패 시 Optional.empty())
      */
     public Optional<CrawledNews> crawl(String url) {
         try {
+            applyRateLimit();
             Document doc = fetchDocument(url);
 
             String body = parseBody(doc, url);
@@ -46,6 +66,28 @@ public class NaverNewsCrawler {
             log.error("크롤링 실패: {}", url, e);
             return Optional.empty();
         }
+    }
+
+    /**
+     * Rate limiting 적용
+     * 마지막 요청 이후 설정된 시간만큼 대기
+     */
+    private synchronized void applyRateLimit() {
+        long currentTime = System.currentTimeMillis();
+        long timeSinceLastCrawl = currentTime - lastCrawlTime;
+
+        if (timeSinceLastCrawl < delayMillis) {
+            long sleepTime = delayMillis - timeSinceLastCrawl;
+            try {
+                log.debug("Rate limiting: sleeping for {}ms", sleepTime);
+                Thread.sleep(sleepTime);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Rate limiting interrupted", e);
+            }
+        }
+
+        lastCrawlTime = System.currentTimeMillis();
     }
 
     /**

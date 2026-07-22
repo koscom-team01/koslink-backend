@@ -217,10 +217,12 @@ public class NewsScheduler {
         Set<String> existingUrls = newsRepository.findExistingUrls(urls);
         log.info("DB duplicate check: {} crawled, {} already exist", urls.size(), existingUrls.size());
 
-        // DB에 없는 기사만 배치 저장
+        // DB에 없는 기사만 변환 (pubDate 파싱 실패 시 제외)
         List<News> newsToSave = crawledArticles.stream()
                 .filter(ca -> !existingUrls.contains(ca.item().link()))
                 .map(this::convertToNewsEntity)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
                 .toList();
 
         if (!newsToSave.isEmpty()) {
@@ -237,17 +239,26 @@ public class NewsScheduler {
      * CrawledArticle을 News 엔티티로 변환
      *
      * @param crawledArticle 크롤링된 기사
-     * @return News 엔티티
+     * @return News 엔티티 (pubDate 파싱 실패 시 Optional.empty())
      */
-    private News convertToNewsEntity(CrawledArticle crawledArticle) {
-        OffsetDateTime publishedAt = DateParser.parseNaverPubDate(crawledArticle.item().pubDate());
-        return News.of(
+    private Optional<News> convertToNewsEntity(CrawledArticle crawledArticle) {
+        Optional<OffsetDateTime> publishedAtOpt = DateParser.parseNaverPubDate(crawledArticle.item().pubDate());
+
+        if (publishedAtOpt.isEmpty()) {
+            log.warn("Skipping article due to pubDate parse failure: [{}] {}",
+                    crawledArticle.item().title(), crawledArticle.item().pubDate());
+            return Optional.empty();
+        }
+
+        News news = News.of(
                 crawledArticle.item().title(),
                 crawledArticle.crawledNews().body(),
                 crawledArticle.item().link(),
                 crawledArticle.crawledNews().press(),
-                publishedAt
+                publishedAtOpt.get()
         );
+
+        return Optional.of(news);
     }
 
     /**
