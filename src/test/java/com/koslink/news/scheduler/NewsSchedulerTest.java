@@ -2,12 +2,13 @@ package com.koslink.news.scheduler;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.koslink.news.cache.ArticleFingerprint;
+import com.koslink.news.crawler.NaverNewsCrawler;
 import com.koslink.news.dto.NewsItem;
 import com.koslink.news.dto.NewsSearchRequest;
 import com.koslink.news.dto.NewsSearchResponse;
+import com.koslink.news.repository.NewsRepository;
 import com.koslink.news.service.NewsService;
 import com.koslink.news.stub.NewsItemStub;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@DisplayName("뉴스 스케줄러 통합 테스트")
+@DisplayName("뉴스 스케줄러 단위 테스트")
 @ExtendWith(MockitoExtension.class)
 class NewsSchedulerTest {
 
@@ -30,6 +31,12 @@ class NewsSchedulerTest {
 
     @Mock
     private Cache<String, ArticleFingerprint> recentArticleCache;
+
+    @Mock
+    private NaverNewsCrawler naverNewsCrawler;
+
+    @Mock
+    private NewsRepository newsRepository;
 
     @InjectMocks
     private NewsScheduler newsScheduler;

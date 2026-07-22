@@ -1,6 +1,23 @@
 spring:
   application:
     name: koslink
+  datasource:
+    url: jdbc:postgresql://localhost:5432/koscomdb
+    username: admin
+    password: adminpassword
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
 
 naver:
   api:
@@ -8,3 +25,6 @@ naver:
     client-secret: A6wJY6CriE
     base-url: https://openapi.naver.com
     news-search-path: /v1/search/news.json
+
+crawler:
+  delay-ms: 200  # 크롤링 요청 간 최소 딜레이 (밀리초)

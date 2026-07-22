@@ -13,7 +13,7 @@ public class NewsItemStub {
             "https://www.original-press.com/article/1",
             "https://n.news.naver.com/article/001/0014512345",
             "삼성전자가 3나노 공정 수율을 개선했다",
-            "Mon, 21 Jan 2024 10:00:00 +0900"
+            "Sun, 21 Jan 2024 10:00:00 +0900"
     );
 
     public static final NewsItem NAVER_NEWS_2 = new NewsItem(
@@ -21,7 +21,7 @@ public class NewsItemStub {
             "https://www.another-press.com/article/2",
             "https://news.naver.com/main/read.nhn?oid=002&aid=0014512346",
             "삼성전자가 3나노 공정 수율 개선에 성공했다",
-            "Mon, 21 Jan 2024 10:05:00 +0900"
+            "Sun, 21 Jan 2024 10:05:00 +0900"
     );
 
     public static final NewsItem NAVER_NEWS_DIFFERENT = new NewsItem(
@@ -29,7 +29,7 @@ public class NewsItemStub {
             "https://www.press3.com/article/3",
             "https://n.news.naver.com/article/003/0014512347",
             "SK하이닉스가 HBM을 수주했다",
-            "Mon, 21 Jan 2024 10:10:00 +0900"
+            "Sun, 21 Jan 2024 10:10:00 +0900"
     );
 
     // 비네이버 뉴스 URL
@@ -38,7 +38,7 @@ public class NewsItemStub {
             "https://www.chosun.com/article/100",
             "https://www.chosun.com/article/100",
             "반도체 시장이 회복세를 보이고 있다",
-            "Mon, 21 Jan 2024 10:15:00 +0900"
+            "Sun, 21 Jan 2024 10:15:00 +0900"
     );
 
     // 유사도 테스트용
@@ -47,7 +47,7 @@ public class NewsItemStub {
             "https://www.press4.com/article/4",
             "https://n.news.naver.com/article/004/0014512348",
             "삼성전자가 3나노 공정 수율을 크게 개선했다",
-            "Mon, 21 Jan 2024 10:20:00 +0900"
+            "Sun, 21 Jan 2024 10:20:00 +0900"
     );
 
     public static final NewsItem SLIGHTLY_SIMILAR = new NewsItem(
@@ -55,7 +55,7 @@ public class NewsItemStub {
             "https://www.press5.com/article/5",
             "https://n.news.naver.com/article/005/0014512349",
             "삼성전자가 반도체 기술 혁신을 이뤘다",
-            "Mon, 21 Jan 2024 10:25:00 +0900"
+            "Sun, 21 Jan 2024 10:25:00 +0900"
     );
 
     public static final NewsItem COMPLETELY_DIFFERENT = new NewsItem(
@@ -63,6 +63,6 @@ public class NewsItemStub {
             "https://www.press6.com/article/6",
             "https://n.news.naver.com/article/006/0014512350",
             "현대차 전기차 판매가 급증하고 있다",
-            "Mon, 21 Jan 2024 10:30:00 +0900"
+            "Sun, 21 Jan 2024 10:30:00 +0900"
     );
 }
