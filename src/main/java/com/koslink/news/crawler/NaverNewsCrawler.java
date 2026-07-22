@@ -48,7 +48,12 @@ public class NaverNewsCrawler {
      */
     public Optional<CrawledNews> crawl(String url) {
         try {
-            applyRateLimit();
+            if (!applyRateLimit()) {
+                // 인터럽트 발생 시 크롤링 중단
+                log.info("Crawling cancelled due to interrupt: {}", url);
+                return Optional.empty();
+            }
+
             Document doc = fetchDocument(url);
 
             String body = parseBody(doc, url);
@@ -71,8 +76,10 @@ public class NaverNewsCrawler {
     /**
      * Rate limiting 적용
      * 마지막 요청 이후 설정된 시간만큼 대기
+     *
+     * @return true: 정상 대기 완료, false: 인터럽트 발생으로 중단
      */
-    private synchronized void applyRateLimit() {
+    private synchronized boolean applyRateLimit() {
         long currentTime = System.currentTimeMillis();
         long timeSinceLastCrawl = currentTime - lastCrawlTime;
 
@@ -83,11 +90,13 @@ public class NaverNewsCrawler {
                 Thread.sleep(sleepTime);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                log.warn("Rate limiting interrupted", e);
+                log.warn("Rate limiting interrupted - stopping crawl", e);
+                return false; // 인터럽트 시 크롤링 중단
             }
         }
 
         lastCrawlTime = System.currentTimeMillis();
+        return true;
     }
 
     /**
