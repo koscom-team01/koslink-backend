@@ -1,7 +1,6 @@
 HELP.md
 .gradle
 build/
-!gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
 
@@ -51,6 +50,7 @@ out/
 
 # Package Files #
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.nar
 *.ear
@@ -139,5 +139,8 @@ $RECYCLE.BIN/
 
 # Windows shortcuts
 *.lnk
+
+# Kubernetes credentials
+*kubeconfig.yaml
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,visualstudiocode,java
