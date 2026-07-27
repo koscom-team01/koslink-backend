@@ -13,11 +13,8 @@ RUN gradle bootJar -x test --no-daemon
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
-# 시스템 시간대 및 보완 설정
-RUN apt-get update && apt-get install -y tzdata && \
-    cp /usr/share/zoneinfo/Asia/Seoul /etc/localtime && \
-    echo "Asia/Seoul" > /etc/localtime && \
-    rm -rf /var/lib/apt/lists/*
+# 시스템 시간대 설정 (apt-get 네트워크 타임아웃 지연 원인 제거)
+ENV TZ=Asia/Seoul
 
 # 빌드 결과물 복사
 COPY --from=builder /app/build/libs/*.jar app.jar
