@@ -1,19 +1,13 @@
 # Build Stage
-FROM eclipse-temurin:17-jdk AS builder
+FROM gradle:jdk17 AS builder
 WORKDIR /app
 
-# Gradle 캐시 활용을 위한 종속성 파일 복사
-COPY gradlew .
-COPY gradle gradle
+# Gradle 설정 및 소스 코드 복사
 COPY build.gradle settings.gradle ./
-
-# Gradle 실행 권한 부여 및 의존성 다운로드
-RUN chmod +x ./gradlew
-RUN ./gradlew dependencies --no-daemon || true
-
-# 전체 소스 코드 복사 및 실행 가능한 JAR 빌드
 COPY src src
-RUN ./gradlew bootJar -x test --no-daemon
+
+# 이미 내장된 Gradle을 사용하여 실행 가능한 JAR 빌드 (외부 gradle-wrapper 다운로드 방지)
+RUN gradle bootJar -x test --no-daemon
 
 # Runtime Stage
 FROM eclipse-temurin:17-jre
