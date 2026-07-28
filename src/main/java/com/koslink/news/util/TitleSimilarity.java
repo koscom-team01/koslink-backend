@@ -13,7 +13,7 @@ public class TitleSimilarity {
     /**
      * 제목을 정규화하고 토큰화
      * - HTML 태그 제거 (<b> 등)
-     * - 특수문자 제거
+     * - 특수문자 제거 (한글, 영문, 숫자만 유지)
      * - 공백 정규화
      *
      * @param title 원본 제목
@@ -22,7 +22,7 @@ public class TitleSimilarity {
     public static Set<String> tokenize(String title) {
         String normalized = title
                 .replaceAll("<[^>]*>", "")                  // <b> 태그 제거
-                .replaceAll("[\\[\\]()\"']", "")            // 특수문자 제거
+                .replaceAll("[^가-힣a-zA-Z0-9\\s]", " ")    // 한글, 영문, 숫자, 공백만 유지
                 .replaceAll("\\s+", " ")                    // 공백 정규화
                 .trim();
 
