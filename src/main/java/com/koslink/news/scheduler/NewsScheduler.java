@@ -2,9 +2,7 @@ package com.koslink.news.scheduler;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.koslink.news.cache.ArticleFingerprint;
-import com.koslink.news.crawler.NaverNewsCrawler;
 import com.koslink.news.dto.CrawledArticle;
-import com.koslink.news.dto.CrawledNews;
 import com.koslink.news.dto.NewsItem;
 import com.koslink.news.dto.NewsSearchRequest;
 import com.koslink.news.dto.NewsSearchResponse;
@@ -13,7 +11,6 @@ import com.koslink.news.repository.NewsRepository;
 import com.koslink.news.service.NewsService;
 import com.koslink.news.util.DateParser;
 import com.koslink.news.util.NaverNewsUrlFilter;
-import com.koslink.news.util.TitleSimilarity;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -38,7 +35,6 @@ public class NewsScheduler {
 
     private final NewsService newsService;
     private final Cache<String, ArticleFingerprint> recentArticleCache;
-    private final NaverNewsCrawler naverNewsCrawler;
     private final NewsRepository newsRepository;
 
     /**
@@ -95,110 +91,16 @@ public class NewsScheduler {
      */
     private void processDuplicateCheck(List<NewsItem> items) {
         // 1단계: 중복 제거
-        List<NewsItem> uniqueItems = filterDuplicates(items);
+        List<NewsItem> uniqueItems = newsService.filterDuplicates(
+                items, recentArticleCache, SIMILARITY_THRESHOLD);
 
         // 2단계: 크롤링
-        List<CrawledArticle> crawledArticles = crawlArticles(uniqueItems);
+        List<CrawledArticle> crawledArticles = newsService.crawlArticles(uniqueItems);
 
         // 3단계: DB 저장
         if (!crawledArticles.isEmpty()) {
             saveCrawledArticlesToDb(crawledArticles);
         }
-    }
-
-    /**
-     * Jaccard 유사도로 중복 제거
-     *
-     * @param items 검사할 뉴스 아이템 목록
-     * @return 중복이 아닌 기사 목록
-     */
-    private List<NewsItem> filterDuplicates(List<NewsItem> items) {
-        List<NewsItem> uniqueItems = new ArrayList<>();
-        int duplicateCount = 0;
-
-        for (NewsItem item : items) {
-            Set<String> newTokens = TitleSimilarity.tokenize(item.title());
-
-            if (isDuplicateArticle(newTokens, item.title())) {
-                duplicateCount++;
-                continue;
-            }
-
-            // 중복이 아니면 캐시 등록 및 리스트 추가
-            registerToCache(item, newTokens);
-            uniqueItems.add(item);
-        }
-
-        log.info("Duplicate filtering completed - unique: {}, duplicate: {}, cache size: {}",
-                uniqueItems.size(), duplicateCount, recentArticleCache.estimatedSize());
-
-        return uniqueItems;
-    }
-
-    /**
-     * 기사 크롤링
-     *
-     * @param items 크롤링할 뉴스 아이템 목록
-     * @return 크롤링 성공한 기사 목록
-     */
-    private List<CrawledArticle> crawlArticles(List<NewsItem> items) {
-        List<CrawledArticle> crawledArticles = new ArrayList<>();
-
-        for (NewsItem item : items) {
-            log.info("Crawling article: [{}]", item.title());
-
-            Optional<CrawledNews> crawledOpt = naverNewsCrawler.crawl(item.link());
-
-            if (crawledOpt.isPresent()) {
-                CrawledNews crawled = crawledOpt.get();
-                log.info("Crawling success: [{}] (body: {} chars, press: {})",
-                        item.title(), crawled.body().length(), crawled.press());
-
-                crawledArticles.add(new CrawledArticle(item, crawled));
-            } else {
-                log.warn("Crawling failed, skip article: [{}] {}", item.title(), item.link());
-            }
-        }
-
-        log.info("Crawling completed - success: {}/{}", crawledArticles.size(), items.size());
-
-        return crawledArticles;
-    }
-
-    /**
-     * 캐시의 기사들과 Jaccard 유사도 비교하여 중복 여부 판단
-     *
-     * @param newTokens 새 기사의 토큰 집합
-     * @param title 새 기사 제목
-     * @return 중복이면 true, 아니면 false
-     */
-    private boolean isDuplicateArticle(Set<String> newTokens, String title) {
-        for (ArticleFingerprint cached : recentArticleCache.asMap().values()) {
-            double similarity = TitleSimilarity.jaccard(newTokens, cached.getTitleTokens());
-
-            if (similarity >= SIMILARITY_THRESHOLD) {
-                log.info("Duplicate detected (similarity: {:.2f}): [{}] vs [{}]",
-                        similarity, title, cached.getNormalizedTitle());
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 캐시에 기사 등록
-     *
-     * @param item 뉴스 아이템
-     * @param tokens 토큰 집합
-     */
-    private void registerToCache(NewsItem item, Set<String> tokens) {
-        ArticleFingerprint fingerprint = new ArticleFingerprint(
-                item.link(),
-                item.title(),
-                tokens,
-                LocalDateTime.now()
-        );
-        recentArticleCache.put(item.link(), fingerprint);
     }
 
     /**
@@ -319,9 +221,7 @@ public class NewsScheduler {
         List<NewsItem> newItems = extractNewItems(items, lastSeenLink);
 
         // 네이버 뉴스 URL 필터링
-        List<NewsItem> naverNewsItems = newItems.stream()
-                .filter(item -> NaverNewsUrlFilter.isNaverNewsUrl(item.link()))
-                .toList();
+        List<NewsItem> naverNewsItems = newsService.filterNaverNewsUrls(newItems);
 
         int filteredCount = newItems.size() - naverNewsItems.size();
         if (filteredCount > 0) {
