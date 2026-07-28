@@ -1,23 +1,24 @@
 package com.koslink.news.scheduler;
 
 import com.github.benmanes.caffeine.cache.Cache;
-import com.koslink.news.cache.ArticleFingerprint;
+import com.koslink.common.cache.ArticleFingerprint;
 import com.koslink.news.dto.CrawledArticle;
 import com.koslink.news.dto.NewsItem;
 import com.koslink.news.dto.NewsSearchRequest;
 import com.koslink.news.dto.NewsSearchResponse;
 import com.koslink.news.entity.News;
 import com.koslink.news.repository.NewsRepository;
+import com.koslink.news.client.NewsAnalyzeClient;
+import com.koslink.news.dto.NewsAnalyzeResponse;
+import com.koslink.news.service.NewsFilterService;
 import com.koslink.news.service.NewsService;
 import com.koslink.news.util.DateParser;
-import com.koslink.news.util.NaverNewsUrlFilter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,8 @@ public class NewsScheduler {
     private static final double SIMILARITY_THRESHOLD = 0.4;
 
     private final NewsService newsService;
+    private final NewsFilterService newsFilterService;
+    private final NewsAnalyzeClient newsAnalyzeClient;
     private final Cache<String, ArticleFingerprint> recentArticleCache;
     private final NewsRepository newsRepository;
 
@@ -72,34 +75,65 @@ public class NewsScheduler {
     }
 
     /**
-     * 캐시 워밍업 (최초 실행 시)
-     * 최초 100개 안에도 중복이 있을 수 있으므로 중복 판별 수행
-     * 크롤링 및 DB 저장도 함께 수행
-     */
-    private void warmupCache(List<NewsItem> items) {
-        log.info("Cache warmup - processing {} items with duplicate check", items.size());
-
-        // 최초 실행이지만 일반 실행과 동일하게 처리
-        processDuplicateCheck(items);
-
-        log.info("Cache warmup completed - cache size: {}", recentArticleCache.estimatedSize());
-    }
-
-    /**
      * 중복 판별 및 처리
-     * Jaccard 유사도로 같은 사건인지 판단 후 크롤링 및 DB 저장
+     * Jaccard 유사도로 같은 사건인지 판단 후 LLM 필터링, 크롤링 및 DB 저장
      */
     private void processDuplicateCheck(List<NewsItem> items) {
+        if (items.isEmpty()) {
+            log.info("No items to process");
+            return;
+        }
         // 1단계: 중복 제거
         List<NewsItem> uniqueItems = newsService.filterDuplicates(
                 items, recentArticleCache, SIMILARITY_THRESHOLD);
 
-        // 2단계: 크롤링
-        List<CrawledArticle> crawledArticles = newsService.crawlArticles(uniqueItems);
+        // 2단계: LLM 필터링
+        List<NewsItem> relevantItems = filterByLlm(uniqueItems);
 
-        // 3단계: DB 저장
+        // 3단계: 크롤링
+        List<CrawledArticle> crawledArticles = newsService.crawlArticles(relevantItems);
+
+        // 4단계: DB 저장
         if (!crawledArticles.isEmpty()) {
             saveCrawledArticlesToDb(crawledArticles);
+        }
+    }
+
+    /**
+     * LLM을 사용하여 반도체 산업 관련 뉴스만 필터링 (배치 처리)
+     * 필터링 실패 시 보수적으로 전체 포함
+     *
+     * @param items 중복 제거된 뉴스 아이템 목록
+     * @return 반도체 산업 관련 뉴스만 포함된 목록
+     */
+    private List<NewsItem> filterByLlm(List<NewsItem> items) {
+        if (items.isEmpty()) {
+            return items;
+        }
+
+        try {
+            // 제목 목록 추출
+            List<String> titles = items.stream()
+                    .map(NewsItem::title)
+                    .toList();
+
+            // LLM으로 배치 필터링
+            List<String> relevantTitles = newsFilterService.filterRelevantTitles(titles);
+
+            // 관련 제목에 해당하는 NewsItem만 반환
+            List<NewsItem> relevantItems = items.stream()
+                    .filter(item -> relevantTitles.contains(item.title()))
+                    .toList();
+
+            int filteredCount = items.size() - relevantItems.size();
+            log.info("LLM batch filtering completed - relevant: {}, filtered: {}",
+                    relevantItems.size(), filteredCount);
+
+            return relevantItems;
+        } catch (Exception e) {
+            // LLM 필터링 실패 시 보수적으로 전체 포함
+            log.warn("LLM batch filtering failed, including all items by default: {}", e.getMessage());
+            return items;
         }
     }
 
@@ -131,6 +165,9 @@ public class NewsScheduler {
             try {
                 newsRepository.saveAll(newsToSave);
                 log.info("DB batch saved: {} articles", newsToSave.size());
+
+                // 분석 API 호출
+//                requestNewsAnalysis(1);
             } catch (Exception e) {
                 log.error("Failed to batch save to DB", e);
             }
@@ -232,19 +269,12 @@ public class NewsScheduler {
     }
 
     /**
-     * 신규 기사 처리 (최초 실행 vs 일반 실행 분기)
+     * 신규 기사 처리
      *
      * @param naverNewsItems 필터링된 네이버 뉴스 아이템 목록
      */
     private void processNewItems(List<NewsItem> naverNewsItems) {
-        if (lastSeenLink == null) {
-            // 최초 실행: 캐시 워밍업만 수행
-            warmupCache(naverNewsItems);
-        } else if (naverNewsItems.isEmpty()) {
-            log.info("No new Naver news items to process");
-        } else {
-            processDuplicateCheck(naverNewsItems);
-        }
+        processDuplicateCheck(naverNewsItems);
     }
 
     /**
@@ -255,5 +285,15 @@ public class NewsScheduler {
     private void updateLastSeenLink(String latestLink) {
         lastSeenLink = latestLink;
         log.info("Updated lastSeenLink: {}", lastSeenLink);
+    }
+
+    /**
+     * 뉴스 분석 API 호출
+     * PENDING 상태 뉴스를 분석 요청
+     *
+     * @param savedCount 저장된 뉴스 개수
+     */
+    private void requestNewsAnalysis(int savedCount) {
+        List<NewsAnalyzeResponse> responses = newsAnalyzeClient.analyzePendingNews(savedCount);
     }
 }
