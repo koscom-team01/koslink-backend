@@ -1,16 +1,16 @@
 spring:
   application:
-    name: koslink
+    name: koslink-test
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY}
+      api-key: test-key
       chat:
         options:
           model: gpt-4o-mini
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: jdbc:postgresql://localhost:5432/koscomdb
+    username: admin
+    password: adminpassword
   jpa:
     hibernate:
       ddl-auto: validate
@@ -27,14 +27,14 @@ logging:
 
 naver:
   api:
-    client-id: ${NAVER_CLIENT_ID}
-    client-secret: ${NAVER_CLIENT_SECRET}
+    client-id: test-client-id
+    client-secret: test-secret
     base-url: https://openapi.naver.com
     news-search-path: /v1/search/news.json
 
 crawler:
-  delay-ms: 200  # 크롤링 요청 간 최소 딜레이 (밀리초)
+  delay-ms: 0
 
 news:
   analyze:
-    base-url: ${NEWS_ANALYZE_BASE_URL}
+    base-url: http://localhost:8080

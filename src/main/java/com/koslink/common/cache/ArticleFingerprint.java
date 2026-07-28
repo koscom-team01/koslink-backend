@@ -1,4 +1,4 @@
-package com.koslink.news.cache;
+package com.koslink.common.cache;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

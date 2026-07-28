@@ -4,8 +4,4 @@ public class BadRequestException extends KoslinkException {
     public BadRequestException(String message, String displayMessage) {
         super(message, displayMessage);
     }
-
-    public BadRequestException(String message) {
-        super(message);
-    }
 }

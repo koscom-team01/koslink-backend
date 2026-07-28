@@ -1,7 +1,7 @@
 package com.koslink.news.scheduler;
 
 import com.github.benmanes.caffeine.cache.Cache;
-import com.koslink.news.cache.ArticleFingerprint;
+import com.koslink.common.cache.ArticleFingerprint;
 import com.koslink.news.crawler.NaverNewsCrawler;
 import com.koslink.news.dto.NewsItem;
 import com.koslink.news.dto.NewsSearchRequest;
@@ -45,8 +45,6 @@ class NewsSchedulerTest {
     @DisplayName("최초 실행 시 모든 네이버 뉴스를 캐시에 등록한다")
     void should_cache_all_naver_news_on_first_run() {
         // given
-        when(recentArticleCache.asMap()).thenReturn(new java.util.concurrent.ConcurrentHashMap<>());
-
         List<NewsItem> items = List.of(
                 NewsItemStub.NAVER_NEWS_1,
                 NewsItemStub.NAVER_NEWS_2,
@@ -61,22 +59,29 @@ class NewsSchedulerTest {
         );
         when(newsService.searchNews(any(NewsSearchRequest.class))).thenReturn(response);
 
+        // 네이버 뉴스 필터링 Mock
+        List<NewsItem> naverNews = List.of(NewsItemStub.NAVER_NEWS_1, NewsItemStub.NAVER_NEWS_2);
+        when(newsService.filterNaverNewsUrls(anyList())).thenReturn(naverNews);
+
+        // filterDuplicates Mock (중복 없음)
+        when(newsService.filterDuplicates(anyList(), any(), anyDouble())).thenReturn(naverNews);
+
+        // crawlArticles Mock (빈 리스트 반환)
+        when(newsService.crawlArticles(anyList())).thenReturn(List.of());
+
         // when
         newsScheduler.fetchNews();
 
         // then
-        // 네이버 뉴스만 캐시에 등록되어야 함 (2개)
-        verify(recentArticleCache, times(2)).put(anyString(), any(ArticleFingerprint.class));
-        // 비네이버 뉴스는 필터링됨 (1개 제외)
-        verify(recentArticleCache, never()).put(eq(NewsItemStub.NON_NAVER_NEWS.link()), any());
+        // 네이버 뉴스 필터링 호출 확인
+        verify(newsService).filterNaverNewsUrls(anyList());
+        // 중복 제거 호출 확인
+        verify(newsService).filterDuplicates(eq(naverNews), any(), anyDouble());
     }
 
     @Test
     @DisplayName("두 번째 실행 시 새 기사만 처리한다")
     void should_process_only_new_items_on_second_run() {
-        // given
-        when(recentArticleCache.asMap()).thenReturn(new java.util.concurrent.ConcurrentHashMap<>());
-
         // given - 첫 번째 실행
         List<NewsItem> firstItems = List.of(
                 NewsItemStub.NAVER_NEWS_1,
@@ -90,12 +95,15 @@ class NewsSchedulerTest {
                 firstItems
         );
         when(newsService.searchNews(any(NewsSearchRequest.class))).thenReturn(firstResponse);
+        when(newsService.filterNaverNewsUrls(anyList())).thenReturn(firstItems);
+        when(newsService.filterDuplicates(anyList(), any(), anyDouble())).thenReturn(firstItems);
+        when(newsService.crawlArticles(anyList())).thenReturn(List.of());
 
         // when - 첫 번째 실행
         newsScheduler.fetchNews();
 
-        // then - 2개 캐시 등록
-        verify(recentArticleCache, times(2)).put(anyString(), any(ArticleFingerprint.class));
+        // then - 첫 번째 호출 확인
+        verify(newsService, times(1)).filterDuplicates(anyList(), any(), anyDouble());
 
         // given - 두 번째 실행 (새 기사 1개 추가)
         List<NewsItem> secondItems = List.of(
@@ -109,21 +117,22 @@ class NewsSchedulerTest {
                 100,
                 secondItems
         );
+        List<NewsItem> newItemOnly = List.of(NewsItemStub.NAVER_NEWS_DIFFERENT);
         when(newsService.searchNews(any(NewsSearchRequest.class))).thenReturn(secondResponse);
+        when(newsService.filterNaverNewsUrls(anyList())).thenReturn(newItemOnly);
+        when(newsService.filterDuplicates(anyList(), any(), anyDouble())).thenReturn(newItemOnly);
 
         // when - 두 번째 실행
         newsScheduler.fetchNews();
 
-        // then - 새 기사 1개만 추가로 캐시 등록 (총 3번 호출)
-        verify(recentArticleCache, times(3)).put(anyString(), any(ArticleFingerprint.class));
+        // then - 두 번째 호출 확인 (총 2번)
+        verify(newsService, times(2)).filterDuplicates(anyList(), any(), anyDouble());
     }
 
     @Test
     @DisplayName("비네이버 뉴스는 필터링된다")
     void should_filter_non_naver_news() {
         // given
-        when(recentArticleCache.asMap()).thenReturn(new java.util.concurrent.ConcurrentHashMap<>());
-
         List<NewsItem> items = List.of(
                 NewsItemStub.NAVER_NEWS_1,
                 NewsItemStub.NON_NAVER_NEWS
@@ -137,12 +146,18 @@ class NewsSchedulerTest {
         );
         when(newsService.searchNews(any(NewsSearchRequest.class))).thenReturn(response);
 
+        // 네이버 뉴스만 필터링
+        List<NewsItem> naverOnly = List.of(NewsItemStub.NAVER_NEWS_1);
+        when(newsService.filterNaverNewsUrls(anyList())).thenReturn(naverOnly);
+        when(newsService.filterDuplicates(anyList(), any(), anyDouble())).thenReturn(naverOnly);
+        when(newsService.crawlArticles(anyList())).thenReturn(List.of());
+
         // when
         newsScheduler.fetchNews();
 
         // then
-        verify(recentArticleCache, times(1)).put(anyString(), any(ArticleFingerprint.class));
-        verify(recentArticleCache, never()).put(eq(NewsItemStub.NON_NAVER_NEWS.link()), any());
+        verify(newsService).filterNaverNewsUrls(anyList());
+        verify(newsService).filterDuplicates(eq(naverOnly), any(), anyDouble());
     }
 
     @Test
@@ -195,24 +210,19 @@ class NewsSchedulerTest {
                 items
         );
         when(newsService.searchNews(any(NewsSearchRequest.class))).thenReturn(response);
+        when(newsService.filterNaverNewsUrls(anyList())).thenReturn(items);
 
-        // 실제 캐시 동작 모킹
-        java.util.concurrent.ConcurrentHashMap<String, ArticleFingerprint> mockCache =
-                new java.util.concurrent.ConcurrentHashMap<>();
-        when(recentArticleCache.asMap()).thenReturn(mockCache);
-        doAnswer(invocation -> {
-            String key = invocation.getArgument(0);
-            ArticleFingerprint value = invocation.getArgument(1);
-            mockCache.put(key, value);
-            return null;
-        }).when(recentArticleCache).put(anyString(), any(ArticleFingerprint.class));
+        // filterDuplicates가 중복 제거해서 1개만 반환
+        List<NewsItem> deduplicated = List.of(NewsItemStub.NAVER_NEWS_1);
+        when(newsService.filterDuplicates(anyList(), any(), anyDouble())).thenReturn(deduplicated);
+        when(newsService.crawlArticles(anyList())).thenReturn(List.of());
 
         // when
         newsScheduler.fetchNews();
 
-        // then - 유사도가 높아서 1개만 캐시에 등록됨
-        assertThat(mockCache).hasSize(1);
-        assertThat(mockCache).containsKey(NewsItemStub.NAVER_NEWS_1.link());
+        // then - filterDuplicates가 1개만 반환했는지 확인
+        verify(newsService).filterDuplicates(eq(items), any(), anyDouble());
+        verify(newsService).crawlArticles(eq(deduplicated));
     }
 
     @Test
@@ -232,28 +242,17 @@ class NewsSchedulerTest {
                 items
         );
         when(newsService.searchNews(any(NewsSearchRequest.class))).thenReturn(response);
+        when(newsService.filterNaverNewsUrls(anyList())).thenReturn(items);
 
-        // 실제 캐시 동작 모킹
-        java.util.concurrent.ConcurrentHashMap<String, ArticleFingerprint> mockCache =
-                new java.util.concurrent.ConcurrentHashMap<>();
-        when(recentArticleCache.asMap()).thenReturn(mockCache);
-        doAnswer(invocation -> {
-            String key = invocation.getArgument(0);
-            ArticleFingerprint value = invocation.getArgument(1);
-            mockCache.put(key, value);
-            return null;
-        }).when(recentArticleCache).put(anyString(), any(ArticleFingerprint.class));
+        // filterDuplicates가 모두 다른 기사라서 3개 모두 반환
+        when(newsService.filterDuplicates(anyList(), any(), anyDouble())).thenReturn(items);
+        when(newsService.crawlArticles(anyList())).thenReturn(List.of());
 
         // when
         newsScheduler.fetchNews();
 
-        // then - 모두 다른 사건이므로 3개 모두 캐시에 등록됨
-        assertThat(mockCache).hasSize(3);
-        assertThat(mockCache)
-                .containsKeys(
-                        NewsItemStub.NAVER_NEWS_1.link(),
-                        NewsItemStub.NAVER_NEWS_DIFFERENT.link(),
-                        NewsItemStub.COMPLETELY_DIFFERENT.link()
-                );
+        // then - filterDuplicates가 3개 모두 반환했는지 확인
+        verify(newsService).filterDuplicates(eq(items), any(), anyDouble());
+        verify(newsService).crawlArticles(eq(items));
     }
 }

@@ -1,7 +1,7 @@
 package com.koslink.admin.controller;
 
 import com.github.benmanes.caffeine.cache.Cache;
-import com.koslink.news.cache.ArticleFingerprint;
+import com.koslink.common.cache.ArticleFingerprint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
