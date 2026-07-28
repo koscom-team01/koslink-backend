@@ -1,23 +1,36 @@
 package com.koslink.news.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
-import com.koslink.news.cache.ArticleFingerprint;
+import com.koslink.common.cache.ArticleFingerprint;
+import com.koslink.corpus.repository.NewsCorpusRepository;
+import com.koslink.exception.AiResponseNotFoundException;
+import com.koslink.exception.JsonParsingException;
+import com.koslink.exception.NewsNotAnalyzedException;
+import com.koslink.exception.NewsNotFoundException;
 import com.koslink.news.client.NaverNewsClient;
 import com.koslink.news.crawler.NaverNewsCrawler;
-import com.koslink.news.dto.CrawledArticle;
-import com.koslink.news.dto.CrawledNews;
-import com.koslink.news.dto.NewsItem;
-import com.koslink.news.dto.NewsSearchRequest;
-import com.koslink.news.dto.NewsSearchResponse;
+import com.koslink.news.dto.*;
+import com.koslink.news.entity.AiResponse;
+import com.koslink.news.entity.News;
+import com.koslink.news.entity.NewsStatus;
+import com.koslink.news.repository.AiResponseRepository;
+import com.koslink.news.repository.NewsRepository;
 import com.koslink.news.util.NaverNewsUrlFilter;
 import com.koslink.news.util.TitleSimilarity;
 import com.koslink.support.naver.NaverApiProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -30,6 +43,10 @@ public class NewsService {
     private final NaverNewsClient naverNewsClient;
     private final NaverApiProperties naverApiProperties;
     private final NaverNewsCrawler naverNewsCrawler;
+    private final NewsCorpusRepository newsCorpusRepository;
+    private final NewsRepository newsRepository;
+    private final AiResponseRepository aiResponseRepository;
+    private final ObjectMapper objectMapper;
 
     public NewsSearchResponse searchNews(NewsSearchRequest request) {
         log.info("Searching news with query: {}", request.query());
@@ -172,5 +189,146 @@ public class NewsService {
                 LocalDateTime.now()
         );
         cache.put(item.link(), fingerprint);
+    }
+
+    /**
+     * 최신 뉴스 리스트 조회 (커서 기반 페이지네이션)
+     * status = DONE인 뉴스만 반환
+     *
+     * @param cursorId 커서 ID (null이면 첫 페이지)
+     * @param size     페이지당 개수
+     * @return 뉴스 리스트 응답
+     */
+    @Transactional(readOnly = true)
+    public com.koslink.news.dto.NewsListResponse getNewsList(Long cursorId, int size) {
+        List<News> newsList = findNewsList(cursorId, size);
+        boolean hasNext = checkHasNext(newsList, size);
+        List<News> slicedList = sliceBySize(newsList, size, hasNext);
+
+        List<NewsItemDto> newsItems = slicedList.stream()
+                .map(NewsItemDto::from)
+                .toList();
+
+        return NewsListResponse.of(newsItems, hasNext, getLastCursorId(slicedList));
+    }
+
+    private List<News> findNewsList(Long cursorId, int size) {
+        Pageable pageable = PageRequest.of(0, size + 1);
+
+        if (cursorId == null) {
+            return newsRepository.findByStatusOrderByPublishedAtDesc(NewsStatus.DONE, pageable);
+        }
+        return newsRepository.findByStatusAndNewsIdLessThanOrderByPublishedAtDesc(
+                NewsStatus.DONE,
+                cursorId,
+                pageable
+        );
+    }
+
+    private boolean checkHasNext(List<News> newsList, int size) {
+        return newsList.size() > size;
+    }
+
+    private List<News> sliceBySize(
+            List<News> newsList,
+            int size,
+            boolean hasNext
+    ) {
+        if (!hasNext) {
+            return newsList;
+        }
+        return newsList.subList(0, size);
+    }
+
+    private Long getLastCursorId(List<News> slicedList) {
+        if (slicedList.isEmpty()) {
+            return null;
+        }
+        return slicedList.get(slicedList.size() - 1).getNewsId();
+    }
+
+    /**
+     * 뉴스 영향 분석 조회
+     *
+     * @param newsId 뉴스 ID
+     * @return 뉴스 영향 분석 결과
+     */
+    @Transactional(readOnly = true)
+    public NewsImpactResponse getNewsImpact(Long newsId) {
+        // 1. news 테이블에서 조회
+        News news = newsRepository.findById(newsId)
+                .orElseThrow(NewsNotFoundException::new);
+
+        // 2. status = DONE 확인
+        if (news.getStatus() != NewsStatus.DONE) {
+            throw new NewsNotAnalyzedException();
+        }
+
+        // 3. ai_responses 테이블에서 조회
+        AiResponse aiResponse = aiResponseRepository.findByNewsId(newsId)
+                .orElseThrow(AiResponseNotFoundException::new);
+
+        // 4. 데이터 파싱 및 DTO 변환
+        return buildNewsImpactResponse(news, aiResponse);
+    }
+
+    private NewsImpactResponse buildNewsImpactResponse(News news, AiResponse aiResponse) {
+        try {
+            // newsSummary 파싱 (jsonb → List<String>)
+            List<String> newsSummary = objectMapper.readValue(
+                    aiResponse.getNewsSummary(),
+                    new TypeReference<>() {}
+            );
+
+            // source 파싱 (jsonb → NewsSourceDto)
+            NewsSourceDto source = objectMapper.readValue(
+                    aiResponse.getSource(),
+                    NewsSourceDto.class
+            );
+
+            // originStocks 파싱 (jsonb → List<OriginStockDto>)
+            List<OriginStockDto> originStocks = objectMapper.readValue(
+                    aiResponse.getOriginStocks(),
+                    new TypeReference<>() {}
+            );
+
+            // relatedStocks 파싱 (jsonb → List<RelatedStockDto>)
+            // null이거나 빈 배열이면 빈 리스트 반환
+            List<RelatedStockDto> relatedStocks = parseRelatedStocks(aiResponse.getRelatedStocks());
+
+            // graph 파싱 (jsonb → NewsGraphDto)
+            NewsGraphDto graph = objectMapper.readValue(
+                    aiResponse.getGraph(),
+                    NewsGraphDto.class
+            );
+
+            return new NewsImpactResponse(
+                    newsSummary,
+                    source,
+                    originStocks,
+                    relatedStocks,
+                    aiResponse.getFinalSummary(),
+                    graph
+            );
+        } catch (JsonProcessingException e) {
+            throw new JsonParsingException();
+        }
+    }
+
+    private List<RelatedStockDto> parseRelatedStocks(String relatedStocksJson) {
+        if (relatedStocksJson == null || relatedStocksJson.isBlank()) {
+            return List.of();
+        }
+
+        try {
+            List<RelatedStockDto> relatedStocks = objectMapper.readValue(
+                    relatedStocksJson,
+                    new TypeReference<>() {}
+            );
+            return relatedStocks != null ? relatedStocks : List.of();
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse related_stocks, returning empty list");
+            return List.of();
+        }
     }
 }
