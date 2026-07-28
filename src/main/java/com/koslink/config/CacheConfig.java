@@ -2,7 +2,7 @@ package com.koslink.config;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.koslink.news.cache.ArticleFingerprint;
+import com.koslink.common.cache.ArticleFingerprint;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
