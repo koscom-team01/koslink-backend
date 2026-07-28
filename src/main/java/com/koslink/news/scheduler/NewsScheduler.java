@@ -167,7 +167,7 @@ public class NewsScheduler {
                 log.info("DB batch saved: {} articles", newsToSave.size());
 
                 // 분석 API 호출
-//                requestNewsAnalysis(1);
+                requestNewsAnalysis(newsToSave.size());
             } catch (Exception e) {
                 log.error("Failed to batch save to DB", e);
             }
