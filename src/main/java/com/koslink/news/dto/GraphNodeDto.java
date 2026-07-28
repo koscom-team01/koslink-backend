@@ -6,10 +6,8 @@ package com.koslink.news.dto;
 public record GraphNodeDto(
         String id,
         String name,
-        String kind,
         String ticker,
-        String sector,
-        Long marketCap,
-        String direction
+        String capSize,
+        String marketType
 ) {
 }
