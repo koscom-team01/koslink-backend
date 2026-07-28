@@ -2,6 +2,7 @@ package com.koslink.corpus.repository;
 
 import com.koslink.corpus.dto.NewsCorpusCacheDto;
 import com.koslink.corpus.entity.NewsCorpus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -32,4 +33,21 @@ public interface NewsCorpusRepository extends JpaRepository<NewsCorpus, Long> {
     @Query("SELECT new com.koslink.corpus.dto.NewsCorpusCacheDto(nc.url, nc.title) " +
            "FROM NewsCorpus nc ORDER BY nc.createdAt DESC")
     List<NewsCorpusCacheDto> findAllForCacheWarmup();
+
+    /**
+     * 최신 뉴스 조회 (첫 페이지)
+     *
+     * @param pageable 페이지 정보
+     * @return 뉴스 목록
+     */
+    List<NewsCorpus> findAllByOrderByPublishedAtDesc(Pageable pageable);
+
+    /**
+     * 커서 이후 뉴스 조회 (다음 페이지)
+     *
+     * @param cursorId 커서 ID
+     * @param pageable 페이지 정보
+     * @return 뉴스 목록
+     */
+    List<NewsCorpus> findByNewsCorpusIdLessThanOrderByPublishedAtDesc(Long cursorId, Pageable pageable);
 }

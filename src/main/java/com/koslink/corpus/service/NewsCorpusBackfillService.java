@@ -8,7 +8,7 @@ import com.koslink.corpus.entity.NewsCorpus;
 import com.koslink.corpus.entity.NewsDuplicates;
 import com.koslink.corpus.repository.NewsCorpusRepository;
 import com.koslink.corpus.repository.NewsDuplicatesRepository;
-import com.koslink.news.cache.ArticleFingerprint;
+import com.koslink.common.cache.ArticleFingerprint;
 import com.koslink.news.dto.CrawledArticle;
 import com.koslink.news.dto.NewsItem;
 import com.koslink.news.dto.NewsSearchRequest;
