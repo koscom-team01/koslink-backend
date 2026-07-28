@@ -1,13 +1,9 @@
 package com.koslink.news.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.koslink.common.cache.ArticleFingerprint;
 import com.koslink.corpus.repository.NewsCorpusRepository;
 import com.koslink.exception.AiResponseNotFoundException;
-import com.koslink.exception.JsonParsingException;
 import com.koslink.exception.NewsNotAnalyzedException;
 import com.koslink.exception.NewsNotFoundException;
 import com.koslink.news.client.NaverNewsClient;
@@ -46,7 +42,6 @@ public class NewsService {
     private final NewsCorpusRepository newsCorpusRepository;
     private final NewsRepository newsRepository;
     private final AiResponseRepository aiResponseRepository;
-    private final ObjectMapper objectMapper;
 
     public NewsSearchResponse searchNews(NewsSearchRequest request) {
         log.info("Searching news with query: {}", request.query());
@@ -268,67 +263,20 @@ public class NewsService {
         AiResponse aiResponse = aiResponseRepository.findByNewsId(newsId)
                 .orElseThrow(AiResponseNotFoundException::new);
 
+        log.info("aiResponse: {}", aiResponse);
+
         // 4. 데이터 파싱 및 DTO 변환
-        return buildNewsImpactResponse(news, aiResponse);
+        return buildNewsImpactResponse(aiResponse);
     }
 
-    private NewsImpactResponse buildNewsImpactResponse(News news, AiResponse aiResponse) {
-        try {
-            // newsSummary 파싱 (jsonb → List<String>)
-            List<String> newsSummary = objectMapper.readValue(
-                    aiResponse.getNewsSummary(),
-                    new TypeReference<>() {}
-            );
-
-            // source 파싱 (jsonb → NewsSourceDto)
-            NewsSourceDto source = objectMapper.readValue(
-                    aiResponse.getSource(),
-                    NewsSourceDto.class
-            );
-
-            // originStocks 파싱 (jsonb → List<OriginStockDto>)
-            List<OriginStockDto> originStocks = objectMapper.readValue(
-                    aiResponse.getOriginStocks(),
-                    new TypeReference<>() {}
-            );
-
-            // relatedStocks 파싱 (jsonb → List<RelatedStockDto>)
-            // null이거나 빈 배열이면 빈 리스트 반환
-            List<RelatedStockDto> relatedStocks = parseRelatedStocks(aiResponse.getRelatedStocks());
-
-            // graph 파싱 (jsonb → NewsGraphDto)
-            NewsGraphDto graph = objectMapper.readValue(
-                    aiResponse.getGraph(),
-                    NewsGraphDto.class
-            );
-
-            return new NewsImpactResponse(
-                    newsSummary,
-                    source,
-                    originStocks,
-                    relatedStocks,
-                    aiResponse.getFinalSummary(),
-                    graph
-            );
-        } catch (JsonProcessingException e) {
-            throw new JsonParsingException();
-        }
-    }
-
-    private List<RelatedStockDto> parseRelatedStocks(String relatedStocksJson) {
-        if (relatedStocksJson == null || relatedStocksJson.isBlank()) {
-            return List.of();
-        }
-
-        try {
-            List<RelatedStockDto> relatedStocks = objectMapper.readValue(
-                    relatedStocksJson,
-                    new TypeReference<>() {}
-            );
-            return relatedStocks != null ? relatedStocks : List.of();
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to parse related_stocks, returning empty list");
-            return List.of();
-        }
+    private NewsImpactResponse buildNewsImpactResponse(AiResponse aiResponse) {
+        return new NewsImpactResponse(
+                aiResponse.getNewsSummary(),
+                aiResponse.getSource(),
+                aiResponse.getOriginStocks(),
+                aiResponse.getRelatedStocks(),
+                aiResponse.getFinalSummary(),
+                aiResponse.getGraph()
+        );
     }
 }
