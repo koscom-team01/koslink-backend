@@ -1,9 +1,12 @@
 package com.koslink.news.entity;
 
+import com.koslink.news.converter.*;
+import com.koslink.news.dto.*;
 import jakarta.persistence.*;
 import lombok.Getter;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * AI 분석 응답 엔티티
@@ -21,26 +24,28 @@ public class AiResponse {
     @Column(name = "news_id", nullable = false, unique = true)
     private Long newsId;
 
+    @Convert(converter = NewsSummaryConverter.class)
     @Column(name = "news_summary", columnDefinition = "jsonb")
-    private String newsSummary;
+    private List<String> newsSummary;
 
+    @Convert(converter = NewsSourceConverter.class)
     @Column(name = "source", columnDefinition = "jsonb")
-    private String source;
+    private NewsSourceDto source;
 
+    @Convert(converter = OriginStocksConverter.class)
     @Column(name = "origin_stocks", columnDefinition = "jsonb")
-    private String originStocks;
+    private List<OriginStockDto> originStocks;
 
+    @Convert(converter = RelatedStocksConverter.class)
     @Column(name = "related_stocks", columnDefinition = "jsonb")
-    private String relatedStocks;
+    private List<RelatedStockDto> relatedStocks;
 
     @Column(name = "final_summary", columnDefinition = "TEXT")
     private String finalSummary;
 
+    @Convert(converter = NewsGraphConverter.class)
     @Column(name = "graph", columnDefinition = "jsonb")
-    private String graph;
-
-    @Column(name = "evidence_debug", columnDefinition = "jsonb")
-    private String evidenceDebug;
+    private NewsGraphDto graph;
 
     @Column(name = "status", nullable = false, length = 20)
     private String status = "done";
