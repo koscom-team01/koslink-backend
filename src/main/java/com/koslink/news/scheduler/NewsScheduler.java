@@ -205,34 +205,34 @@ public class NewsScheduler {
      * cron: 초 분 시 일 월 요일
      * "0 * * * * *" = 매분 0초에 실행
      */
-    @Scheduled(cron = "0 * * * * *")
-    public void fetchNews() {
-        log.info("=== News polling started: keyword={}, display={} ===", KEYWORD, DISPLAY_SIZE);
-
-        try {
-            // 1. API 호출
-            NewsSearchResponse response = fetchNewsFromApi();
-
-            if (response.items().isEmpty()) {
-                log.warn("No items in API response");
-                return;
-            }
-
-            // 2. 신규 기사 추출 및 필터링
-            List<NewsItem> naverNewsItems = extractAndFilterNewItems(response.items());
-
-            // 3. 중복 판별 및 처리
-            processNewItems(naverNewsItems);
-
-            // 4. 커서 갱신
-            updateLastSeenLink(response.items().get(0).link());
-
-        } catch (Exception e) {
-            log.error("Failed to fetch news: {}", e.getMessage(), e);
-        }
-
-        log.info("=== News polling completed ===");
-    }
+////    @Scheduled(cron = "0 * * * * *")
+////    public void fetchNews() {
+//        log.info("=== News polling started: keyword={}, display={} ===", KEYWORD, DISPLAY_SIZE);
+//
+//        try {
+//            // 1. API 호출
+//            NewsSearchResponse response = fetchNewsFromApi();
+//
+//            if (response.items().isEmpty()) {
+//                log.warn("No items in API response");
+//                return;
+//            }
+//
+//            // 2. 신규 기사 추출 및 필터링
+//            List<NewsItem> naverNewsItems = extractAndFilterNewItems(response.items());
+//
+//            // 3. 중복 판별 및 처리
+//            processNewItems(naverNewsItems);
+//
+//            // 4. 커서 갱신
+//            updateLastSeenLink(response.items().get(0).link());
+//
+//        } catch (Exception e) {
+//            log.error("Failed to fetch news: {}", e.getMessage(), e);
+//        }
+//
+//        log.info("=== News polling completed ===");
+//    }
 
     /**
      * 네이버 뉴스 API 호출
