@@ -8,12 +8,12 @@ spring:
         options:
           model: gpt-4o-mini
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: ${DB_URL:jdbc:postgresql://postgresql.database.svc.cluster.local:5432/koscomdb}
+    username: ${DB_USERNAME:admin}
+    password: ${DB_PASSWORD:adminpassword}
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
@@ -27,9 +27,9 @@ logging:
 
 naver:
   api:
-    client-id: ${NAVER_CLIENT_ID}
-    client-secret: ${NAVER_CLIENT_SECRET}
-    base-url: https://openapi.naver.com
+    client-id: ${NAVER_CLIENT_ID:XDfkw7nEXh_TSWWWbYBy}
+    client-secret: ${NAVER_CLIENT_SECRET:A6wJY6CriE}
+    base-url: ${NAVER_BASE_URL:https://openapi.naver.com}
     news-search-path: /v1/search/news.json
 
 crawler:
@@ -37,4 +37,4 @@ crawler:
 
 news:
   analyze:
-    base-url: ${NEWS_ANALYZE_BASE_URL}
+    base-url: ${NEWS_ANALYZE_BASE_URL:http://koslink-ai-app:8000}
